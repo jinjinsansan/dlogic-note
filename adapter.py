@@ -11,21 +11,30 @@ from config import DLOGIC_API_URL
 logger = logging.getLogger(__name__)
 
 
-def fetch_races(date: str, race_type: str = "jra") -> list[dict]:
-    """レース一覧を取得（dlogic-agentのスクレイパーと同等）"""
-    resp = requests.post(
-        f"{DLOGIC_API_URL}/api/chat",
-        json={"message": f"今日の{'JRA' if race_type == 'jra' else '地方競馬'}"},
+def fetch_races(date: str, race_type: str = "jra", venue: str = "") -> list[dict]:
+    """レース一覧を取得"""
+    params = {"date": date, "type": race_type}
+    if venue:
+        params["venue"] = venue
+    resp = requests.get(
+        f"{DLOGIC_API_URL}/api/data/races",
+        params=params,
         timeout=30,
     )
-    # 注: これはチャットAPI経由。直接スクレイピングの方が効率的なので
-    # 将来的にはdlogic-agentのスクレイパーを共有モジュール化する
-    raise NotImplementedError("Phase 1で実装: VPS APIに直接レース一覧エンドポイント追加")
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("races", [])
 
 
 def fetch_entries(race_id: str, race_type: str = "jra") -> dict:
     """出馬表を取得"""
-    raise NotImplementedError("Phase 1で実装")
+    resp = requests.get(
+        f"{DLOGIC_API_URL}/api/data/entries/{race_id}",
+        params={"type": race_type},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def fetch_predictions(
@@ -59,8 +68,14 @@ def fetch_predictions(
 
 
 def fetch_odds(race_id: str, race_type: str = "jra") -> dict:
-    """リアルタイムオッズを取得"""
-    raise NotImplementedError("Phase 1で実装: オッズスクレイパー連携")
+    """リアルタイムオッズを取得（出馬表APIのoddsフィールドから取得可能）"""
+    # 出馬表にodds/popularityが含まれている場合はそこから取得
+    entries = fetch_entries(race_id, race_type)
+    odds = {}
+    for entry in entries.get("entries", []):
+        if entry.get("odds"):
+            odds[entry["horse_number"]] = entry["odds"]
+    return odds
 
 
 def fetch_analysis(race_id: str, endpoint: str, params: dict) -> dict:
