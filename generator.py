@@ -36,6 +36,7 @@ def generate_note_article(
     featured_races: list[dict],
     danger_horses: list[dict],
     value_horses: list[dict],
+    race_type: str = "jra",
 ) -> dict:
     """
     note記事を生成
@@ -48,9 +49,12 @@ def generate_note_article(
             "x_post": str,  # X告知文
         }
     """
+    type_label = "中央競馬(JRA)" if race_type == "jra" else "地方競馬"
+
     # データをClaude用にまとめる
     data_summary = {
         "date": date,
+        "race_type": type_label,
         "total_races": len(race_analyses),
         "featured_races": featured_races,
         "danger_horses": danger_horses,
@@ -106,7 +110,7 @@ def generate_note_article(
         }
 
     # 完全なMarkdownを組み立て
-    markdown = f"""# 【D-Logic AI】{date} 競馬予想
+    markdown = f"""# 【D-Logic AI】{date} {type_label}予想
 
 {result.get('free_section', '')}
 
@@ -125,9 +129,9 @@ def generate_note_article(
     return result
 
 
-def save_output(date: str, article: dict, race_data: list[dict]):
+def save_output(date: str, article: dict, race_data: list[dict], race_type: str = "jra"):
     """出力ファイルを保存"""
-    date_dir = os.path.join(OUTPUT_DIR, f"note_drafts/{date}")
+    date_dir = os.path.join(OUTPUT_DIR, f"note_drafts/{date}_{race_type}")
     os.makedirs(date_dir, exist_ok=True)
 
     # Markdown記事

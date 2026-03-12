@@ -139,11 +139,12 @@ def run(date: str, race_type: str = DEFAULT_RACE_TYPE):
         featured_races=featured,
         danger_horses=top_danger,
         value_horses=top_value,
+        race_type=race_type,
     )
 
     # Step 5: 保存
     logger.info("Step 5: 出力保存")
-    output_dir = save_output(date, article, race_analyses)
+    output_dir = save_output(date, article, race_analyses, race_type)
     logger.info(f"  出力先: {output_dir}")
 
     # サマリー表示
