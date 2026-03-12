@@ -135,10 +135,10 @@ def build_unified_race_json(
     total_horses = len(horses)
     result_horses = []
 
+    # Phase 1: 全馬のai_scoreを先に計算（fair_odds正規化のため）
+    all_scores = {}
     for i, (name, num) in enumerate(zip(horses, horse_numbers)):
         ranks = engine_ranks.get(num, {})
-
-        # AI総合スコア: 各エンジン順位の逆数加重平均 (1位=100, 最下位=0)
         if ranks:
             scores = []
             for eng in ["dlogic", "ilogic", "viewlogic", "metalogic"]:
@@ -148,6 +148,14 @@ def build_unified_race_json(
             ai_score = round(sum(scores) / len(scores), 1) if scores else 0
         else:
             ai_score = 0
+        all_scores[num] = ai_score
+
+    # Phase 2: ai_scoreをレース内で正規化して確率を算出
+    score_sum = sum(s for s in all_scores.values() if s > 0)
+
+    for i, (name, num) in enumerate(zip(horses, horse_numbers)):
+        ranks = engine_ranks.get(num, {})
+        ai_score = all_scores[num]
 
         # MetaLogicの順位をai_rankとする
         meta_rank = ranks.get("metalogic", total_horses)
@@ -165,13 +173,15 @@ def build_unified_race_json(
             win_prob = round(0.8 / market_odds, 3) if market_odds > 0 else 0
             place_prob = round(min(1.0, win_prob * 2.5), 3)
 
-        # AI fair_odds: AIスコアから逆算
-        if ai_score > 0:
-            implied_prob = ai_score / 100
-            fair_odds = round(0.8 / implied_prob, 2) if implied_prob > 0 else 99.9
+        # AI fair_odds: レース内スコアを正規化して確率→オッズに変換
+        if ai_score > 0 and score_sum > 0:
+            implied_prob = ai_score / score_sum
+            fair_odds = round(1.0 / implied_prob, 1) if implied_prob > 0 else 99.9
+        elif ai_score == 0:
+            fair_odds = 99.9  # エンジン未評価
 
         # バリューギャップ（fair_odds / market_odds）
-        # > 1.0 = 市場が過大評価（危険人気）、< 1.0 = 市場が過小評価（妙味あり）
+        # > 1.5 = 市場が過大評価（危険人気）、< 1.0 = 市場が過小評価（妙味あり）
         if fair_odds and market_odds and market_odds > 0:
             value_gap = round(fair_odds / market_odds, 2)
 
