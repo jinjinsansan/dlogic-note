@@ -61,53 +61,76 @@ def generate_note_article(
         "value_horses": value_horses,
     }
 
-    prompt = f"""以下のD-Logic AIの分析データを元に、note有料記事を生成してください。
+    data_json = json.dumps(data_summary, ensure_ascii=False, indent=2)
 
-## 分析データ
+    # Step 1: 無料部分を生成
+    free_prompt = f"""以下のデータを元に、note記事の**無料部分**をMarkdownで書いてください。
+
+## データ
 ```json
-{json.dumps(data_summary, ensure_ascii=False, indent=2)}
+{data_json}
 ```
 
-## 出力形式
-以下の3つを **JSON形式** で返してください:
+## 無料部分に含めるもの
+- 本日の開催概要（{type_label}、レース数）
+- 厳選レース名の紹介（詳細分析は有料部分で）
+- D-Logic AIエンジンの簡単な紹介
+- 注目ポイント（具体的な馬名は1-2頭だけチラ見せ）
+- 最後に「続きは有料部分で →」で締める
 
-{{
-  "free_section": "（無料で読める部分のMarkdown）",
-  "paid_section": "（有料部分のMarkdown）",
-  "x_post": "（X告知用テキスト、140字以内）"
-}}
+Markdownのみ出力してください。JSON不要。"""
 
-無料部分には「続きは有料部分で →」で締めてください。
-有料部分には各レースの詳細分析、推奨買い目を含めてください。
-"""
-
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=4096,
+    free_resp = client.messages.create(
+        model=CLAUDE_MODEL, max_tokens=2048,
         system=ARTICLE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": free_prompt}],
     )
+    free_section = free_resp.content[0].text.strip()
 
-    text = response.content[0].text
+    # Step 2: 有料部分を生成
+    paid_prompt = f"""以下のデータを元に、note記事の**有料部分**をMarkdownで書いてください。
 
-    # JSON部分を抽出
-    try:
-        # ```json ... ``` ブロックがある場合
-        if "```json" in text:
-            json_str = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            json_str = text.split("```")[1].split("```")[0].strip()
-        else:
-            json_str = text.strip()
+## データ
+```json
+{data_json}
+```
 
-        result = json.loads(json_str)
-    except (json.JSONDecodeError, IndexError):
-        # パース失敗時はそのままテキストとして返す
-        result = {
-            "free_section": text,
-            "paid_section": "",
-            "x_post": "",
-        }
+## 有料部分に含めるもの
+- 厳選レースごとの詳細分析（AIスコア、勝率、適正オッズ）
+- 各レースの「ひとこと展開予想」
+- AI期待値馬ランキング（上位5頭、スコアとオッズ付き）
+- 危険人気馬（AIスコアが低いのに人気の馬、理由付き）
+- 各レースの推奨買い目（3連複・ワイド・単勝など）
+
+Markdownのみ出力してください。JSON不要。"""
+
+    paid_resp = client.messages.create(
+        model=CLAUDE_MODEL, max_tokens=8192,
+        system=ARTICLE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": paid_prompt}],
+    )
+    paid_section = paid_resp.content[0].text.strip()
+
+    # Step 3: X告知文を生成
+    x_prompt = f"""以下のデータを元に、X（Twitter）告知文を1つ書いてください。140字以内。
+
+{type_label} {date}
+厳選{len(featured_races)}レース、AI期待値馬{len(value_horses)}頭を公開中。
+
+テキストのみ出力。ハッシュタグ2-3個付き。"""
+
+    x_resp = client.messages.create(
+        model=CLAUDE_MODEL, max_tokens=256,
+        system="競馬予想noteの告知ツイートを書くコピーライター。簡潔で引きのある文を書く。",
+        messages=[{"role": "user", "content": x_prompt}],
+    )
+    x_post = x_resp.content[0].text.strip()
+
+    result = {
+        "free_section": free_section,
+        "paid_section": paid_section,
+        "x_post": x_post,
+    }
 
     # 完全なMarkdownを組み立て
     markdown = f"""# 【D-Logic AI】{date} {type_label}予想
