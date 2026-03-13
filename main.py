@@ -118,18 +118,48 @@ def run(date: str, race_type: str = DEFAULT_RACE_TYPE):
 
     all_danger = []
     all_value = []
+    all_distortions = []  # 歪みランキング用
     for analysis in race_analyses:
         all_danger.extend(extract_danger_horses(analysis))
         all_value.extend(extract_value_horses(analysis))
+        # 各馬の歪み（AI勝率 vs 市場勝率）を計算
+        for h in analysis.get("horses", []):
+            if h.get("ai_score", 0) > 0 and h.get("win_prob") and h.get("fair_odds") and h.get("market_odds"):
+                market_prob = round(0.8 / h["market_odds"] * 100, 1) if h["market_odds"] > 0 else 0
+                ai_prob = round(1.0 / h["fair_odds"] * 100, 1) if h["fair_odds"] > 0 else 0
+                distortion = round(ai_prob - market_prob, 1)
+                all_distortions.append({
+                    "name": h["name"],
+                    "horse_number": h["horse_number"],
+                    "jockey": h.get("jockey", ""),
+                    "ai_score": h["ai_score"],
+                    "ai_prob": ai_prob,
+                    "market_prob": market_prob,
+                    "distortion": distortion,  # +なら過小評価（妙味）、-なら過大評価（危険）
+                    "fair_odds": h["fair_odds"],
+                    "market_odds": h["market_odds"],
+                    "race_name": analysis.get("race_name", ""),
+                    "venue": analysis.get("venue", ""),
+                    "race_number": analysis.get("race_number", 0),
+                })
 
     # 全体でソートして上位を取得
     all_danger.sort(key=lambda x: x.get("value_gap", 0), reverse=True)
     all_value.sort(key=lambda x: x.get("ai_score", 0), reverse=True)
+    # 歪みランキング: 過小評価（妙味あり）TOP5
+    all_distortions.sort(key=lambda x: x["distortion"], reverse=True)
+    top_distortions = all_distortions[:5]
+    # 危険人気（過大評価）TOP3
+    danger_distortions = [d for d in all_distortions if d["distortion"] < -5 and d["market_odds"] < 10]
+    danger_distortions.sort(key=lambda x: x["distortion"])
+    top_danger_distortions = danger_distortions[:3]
+
     top_danger = all_danger[:5]
     top_value = all_value[:10]
 
     logger.info(f"  危険人気馬: {len(top_danger)} 頭")
     logger.info(f"  期待値馬: {len(top_value)} 頭")
+    logger.info(f"  歪みTOP5: {[d['name'] + '(' + str(d['distortion']) + '%)' for d in top_distortions]}")
 
     # Step 4: 記事生成
     logger.info("Step 4: 記事生成")
@@ -140,6 +170,8 @@ def run(date: str, race_type: str = DEFAULT_RACE_TYPE):
         danger_horses=top_danger,
         value_horses=top_value,
         race_type=race_type,
+        distortion_ranking=top_distortions,
+        danger_ranking=top_danger_distortions,
     )
 
     # Step 5: 保存
@@ -160,16 +192,21 @@ def run(date: str, race_type: str = DEFAULT_RACE_TYPE):
 def select_featured_races(race_analyses: list[dict]) -> list[dict]:
     """
     厳選レースを選定
-    基準: AIスコアの上位馬と下位馬の差が大きい（＝AIが明確な優劣をつけているレース）
+    基準: 市場歪みが大きいレース（AI評価と市場オッズの乖離が最大）
     """
     scored = []
     for analysis in race_analyses:
         horses = analysis.get("horses", [])
         if len(horses) < 2:
             continue
-        scores = [h.get("ai_score", 0) for h in horses]
-        score_spread = max(scores) - min(scores)
-        scored.append((score_spread, analysis))
+        # 各馬のvalue_gapの分散（歪みの大きさ）を計算
+        gaps = [abs(1.0 - h.get("value_gap", 1.0)) for h in horses if h.get("value_gap")]
+        if not gaps:
+            continue
+        max_gap = max(gaps)
+        avg_gap = sum(gaps) / len(gaps)
+        distortion_score = max_gap + avg_gap  # 最大歪み + 平均歪みで評価
+        scored.append((distortion_score, analysis))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [analysis for _, analysis in scored[:MAX_FEATURED_RACES]]

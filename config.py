@@ -20,4 +20,4 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 # 対象レース設定
 DEFAULT_RACE_TYPE = "jra"  # jra or nar
 MIN_HORSES = 8  # 最低出走頭数（少頭数は除外）
-MAX_FEATURED_RACES = 5  # 厳選レース数
+MAX_FEATURED_RACES = 2  # 厳選レース数（売れる記事は2-3が最適）
