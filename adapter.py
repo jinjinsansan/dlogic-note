@@ -6,7 +6,7 @@ import requests
 import logging
 from typing import Optional
 
-from config import DLOGIC_API_URL
+from config import DLOGIC_API_URL, DLOGIC_BACKEND_URL
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ def fetch_predictions(
         "track_condition": track_condition,
     }
     resp = requests.post(
-        f"{DLOGIC_API_URL}/api/v2/predictions/newspaper",
+        f"{DLOGIC_BACKEND_URL}/api/v2/predictions/newspaper",
         json=payload,
         timeout=60,
     )

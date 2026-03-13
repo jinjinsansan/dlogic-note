@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # D-Logic VPS API
+# DATA_API: レース一覧・出馬表 (Flask linebot, port 5000)
+# BACKEND_API: 予想エンジン (FastAPI, port 8000)
 DLOGIC_API_URL = os.getenv("DLOGIC_API_URL", "https://bot.dlogicai.in")
+DLOGIC_BACKEND_URL = os.getenv("DLOGIC_BACKEND_URL", DLOGIC_API_URL)
 
 # Claude API (記事生成用)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
