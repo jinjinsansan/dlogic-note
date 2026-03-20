@@ -20,6 +20,8 @@ from .services.article_service import (
     generate_note_paid,
     generate_danger_markdown,
 )
+from .services.x_poster import post_to_x
+from .services.note_poster import post_to_note
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -102,16 +104,49 @@ def run(date: str, race_type: str = "nar"):
         f.write(note_paid)
 
     logger.info(f"  出力先: {output_dir}")
+
+    # Step 5: X自動投稿
+    logger.info("Step 5: X自動投稿")
+    x_result = post_to_x(x_post)
+    if x_result["status"] == "ok":
+        logger.info(f"  ✓ X投稿成功: https://x.com/i/status/{x_result['tweet_id']}")
+    else:
+        logger.warning(f"  ✗ X投稿失敗: {x_result['message']}")
+
+    # Step 6: note有料記事投稿
+    logger.info("Step 6: note有料記事投稿")
+    note_title = f"【{date_display}】買ってはいけない人気馬{len(danger_results)}頭｜独自AIが過剰人気を検知"
+    note_result = post_to_note(
+        title=note_title,
+        body_md="",
+        price=980,
+        free_body=note_free,
+        paid_body=note_paid,
+    )
+    if note_result["status"] == "ok":
+        logger.info(f"  ✓ note投稿成功: {note_result.get('url', '')}")
+    else:
+        logger.warning(f"  ✗ note投稿失敗: {note_result['message']}")
+
     logger.info("=== 完了 ===")
-    logger.info(f"  X投稿文: {x_post[:80]}...")
 
     return output_dir
+
+
+def auto_race_type(date_str: str) -> str:
+    """曜日から自動判定: 土日=JRA、平日=NAR"""
+    try:
+        dt = datetime.strptime(date_str, "%Y%m%d")
+        return "jra" if dt.weekday() >= 5 else "nar"  # 5=土, 6=日
+    except ValueError:
+        return "nar"
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AI危険人気馬BOT")
     parser.add_argument("--date", default=datetime.now().strftime("%Y%m%d"), help="対象日 (YYYYMMDD)")
-    parser.add_argument("--type", default="nar", choices=["jra", "nar"], help="レースタイプ")
+    parser.add_argument("--type", default=None, choices=["jra", "nar"], help="レースタイプ (省略時: 土日=jra, 平日=nar)")
     args = parser.parse_args()
 
-    run(args.date, args.type)
+    race_type = args.type or auto_race_type(args.date)
+    run(args.date, race_type)
