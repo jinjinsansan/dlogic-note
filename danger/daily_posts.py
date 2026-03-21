@@ -12,6 +12,9 @@ Usage:
   python -m danger.daily_posts education  # ③ 教育コンテンツ
   python -m danger.daily_posts stats      # ④ 実績レポート
 """
+from dotenv import load_dotenv
+load_dotenv()
+
 import argparse
 import logging
 from datetime import datetime, timedelta

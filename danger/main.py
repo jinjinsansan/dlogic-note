@@ -6,6 +6,9 @@ Usage:
     python -m danger.main --date 20260313    # 指定日
     python -m danger.main --type jra         # JRA
 """
+from dotenv import load_dotenv
+load_dotenv()
+
 import argparse
 import json
 import os
