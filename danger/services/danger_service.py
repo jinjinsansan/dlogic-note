@@ -507,12 +507,12 @@ def find_danger_horses(horses: list[HorseData], top_n: int = 5) -> list[DangerRe
         total = _apply_corrections(h, breakdown)
         level = _classify_danger(total)
 
-        if not level:
-            continue
-
         danger_type = _classify_danger_type(h, breakdown)
-        betting_note = _generate_betting_note(level)
+        betting_note = _generate_betting_note(level) if level else "過信は禁物。相手までが妥当。"
         story = _generate_story(h, breakdown)
+        # Assign minimum level C for top-N fallback (will be set below)
+        if not level:
+            level = "C"
         reason_summary = _generate_reason_summary(h, story, level)
 
         candidates.append(DangerResult(
@@ -528,4 +528,12 @@ def find_danger_horses(horses: list[HorseData], top_n: int = 5) -> list[DangerRe
         ))
 
     candidates.sort(key=lambda x: x.danger_score, reverse=True)
-    return candidates[:top_n]
+
+    # Ensure top_n results: if fewer than top_n scored 50+, include lower-scored
+    # horses but cap at minimum score 20 to avoid noise
+    result = [c for c in candidates if c.danger_score >= 50][:top_n]
+    if len(result) < top_n:
+        remaining = [c for c in candidates if c.danger_score < 50 and c.danger_score >= 20]
+        result.extend(remaining[:top_n - len(result)])
+
+    return result

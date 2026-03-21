@@ -17,6 +17,34 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 }
 
+# Prefetch data directory (dlogic-agent on VPS)
+PREFETCH_DIR = "/opt/dlogic/linebot/data/prefetch"
+
+
+def _resolve_netkeiba_id(race_id: str, date: str, race_type: str) -> str:
+    """Resolve custom race_id (YYYYMMDD-venue-num) to netkeiba race_id via prefetch."""
+    # Already netkeiba format
+    if race_id.isdigit() and len(race_id) >= 10:
+        return race_id
+
+    prefetch_path = os.path.join(PREFETCH_DIR, f"races_{date}.json")
+    if not os.path.exists(prefetch_path):
+        logger.warning(f"Prefetch not found: {prefetch_path}")
+        return race_id
+
+    try:
+        with open(prefetch_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for r in data.get("races", []):
+            rid = r.get("race_id", "")
+            nk_id = r.get("race_id_netkeiba", "")
+            if rid == race_id and nk_id:
+                return nk_id
+    except Exception as e:
+        logger.warning(f"Prefetch parse error: {e}")
+
+    return race_id
+
 
 def _fetch_result_page(race_id: str, race_type: str) -> BeautifulSoup | None:
     """netkeibaから結果ページを取得"""
@@ -24,7 +52,7 @@ def _fetch_result_page(race_id: str, race_type: str) -> BeautifulSoup | None:
     url = f"{base}/race/result.html?race_id={race_id}"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.encoding = "euc-jp"
+        resp.encoding = "utf-8" if race_type == "nar" else "euc-jp"
         if resp.status_code != 200:
             return None
         return BeautifulSoup(resp.text, "html.parser")
@@ -105,11 +133,8 @@ def check_danger_results(date: str, race_type: str) -> list[dict]:
     results = []
     for d in danger_data:
         race_id = d.get("race_id") or f"{date}-{d['track_name']}-{d['race_number']}"
-
-        # netkeiba race_id に変換が必要だが、直接取得は困難
-        # → dlogic-agentのprefetchデータからnetkeiba IDを探す
-        # 簡易版: race_id そのものでは取れないので、結果は手動入力も可
-        soup = _fetch_result_page(race_id, race_type)
+        netkeiba_id = _resolve_netkeiba_id(race_id, date, race_type)
+        soup = _fetch_result_page(netkeiba_id, race_type)
         position = 0
         win_payout = 0
 
