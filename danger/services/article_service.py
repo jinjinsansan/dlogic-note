@@ -64,6 +64,16 @@ def _overbought_text(ratio: float) -> str:
     return ""
 
 
+def _format_popularity(result: DangerResult) -> str:
+    pop = result.horse.popularity_rank
+    return f"{pop}番人気" if 0 < pop < 99 else "人気未確定"
+
+
+def _format_odds(result: DangerResult) -> str:
+    odds = result.horse.odds_win
+    return f"単勝{odds}倍" if odds > 0 else "単勝オッズ未確定"
+
+
 # ---------------------------------------------------------------------------
 # ① X投稿: 今日の危険人気馬
 # ---------------------------------------------------------------------------
@@ -78,10 +88,13 @@ def generate_x_post(results: list[DangerResult], date_display: str, track: str) 
     reasons = _clean_reasons(top.main_reasons[:2])
     reason = reasons[0] if reasons else "人気ほどの信頼は置きにくい"
 
+    popularity = _format_popularity(top)
+    odds = _format_odds(top)
+
     text = (
         f"【今日の危険人気馬】\n"
         f"{h.horse_name}（{h.track_name}{h.race_number}R）\n"
-        f"{h.popularity_rank}番人気 単勝{h.odds_win}倍\n"
+        f"{popularity} {odds}\n"
         f"危険度{level}\n\n"
         f"{reason}\n\n"
         f"#競馬予想 #危険人気馬"
@@ -128,7 +141,7 @@ def generate_x_review_post(checked_results: list[dict], date_display: str) -> st
 _EDUCATION_TEMPLATES = [
     # ① 王道フック
     (
-        "今日の1番人気、普通に危ないです。\n\n"
+        "人気馬ほど、普通に危ない理由があります。\n\n"
         "理由はシンプルで\n"
         "「前走がハマりすぎ」\n\n"
         "今回同じ形になる可能性は低い。\n\n"
@@ -139,7 +152,7 @@ _EDUCATION_TEMPLATES = [
     # ② 恐怖訴求
     (
         "これ、普通に買うとやられます。\n\n"
-        "今日の危険人気馬は\n"
+        "危険人気馬に多いのは\n"
         "「能力はあるけど買い時じゃないタイプ」\n\n"
         "こういう馬が一番回収率を壊す。\n\n"
         "当てるより\n"
@@ -159,8 +172,8 @@ _EDUCATION_TEMPLATES = [
     ),
     # ④ 限定感
     (
-        "今日は3頭だけです。\n\n"
-        "その中でも1番危ないのは\n"
+        "危険人気馬は多くない日でも\n\n"
+        "一番危ないのは\n"
         "人気的にも\"買いたくなる位置\"ですが\n"
         "条件と展開がズレてます。\n\n"
         "こういう日は\n"
@@ -222,7 +235,7 @@ _EDUCATION_TEMPLATES = [
     ),
     # ⑩ クロージング（購入誘導強）
     (
-        "今日の危険人気馬まとめました。\n\n"
+        "危険人気馬の傾向をまとめると、\n\n"
         "・買いたくなる位置の人気\n"
         "・でも中身はズレてる\n"
         "・だからオッズに見合わない\n\n"
@@ -347,9 +360,12 @@ def generate_note_paid(results: list[DangerResult], date_display: str) -> str:
         bd = r.score_breakdown
         medal = medals[i] if i < len(medals) else f"{i+1}位"
 
+        popularity = _format_popularity(r)
+        odds = _format_odds(r)
+
         sections.append(f"""{medal}{h.horse_name}（{h.track_name}{h.race_number}R）
 
-想定{h.popularity_rank}番人気 / 単勝{h.odds_win}倍 / 危険度{r.danger_level}（{r.danger_score}点）
+想定{popularity} / {odds} / 危険度{r.danger_level}（{r.danger_score}点）
 
 **なぜ危険か**
 
@@ -432,9 +448,11 @@ def generate_danger_markdown(results: list[DangerResult], date_display: str) -> 
 
     for i, r in enumerate(results, 1):
         h = r.horse
+        pop = _format_popularity(r)
+        odds = _format_odds(r)
         lines.append(
             f"| {i}位 | {h.horse_name} | {h.track_name}{h.race_number}R | "
-            f"{h.popularity_rank}人気 | {h.odds_win}倍 | {r.danger_level} | "
+            f"{pop} | {odds} | {r.danger_level} | "
             f"{r.danger_score}点 |"
         )
 

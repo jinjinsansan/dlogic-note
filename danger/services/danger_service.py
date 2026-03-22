@@ -536,4 +536,39 @@ def find_danger_horses(horses: list[HorseData], top_n: int = 5) -> list[DangerRe
         remaining = [c for c in candidates if c.danger_score < 50 and c.danger_score >= 20]
         result.extend(remaining[:top_n - len(result)])
 
+    if not result and candidates:
+        result = candidates[:top_n]
+
+    if not candidates and horses:
+        with_odds = [h for h in horses if h.odds_win > 0]
+        source = with_odds if with_odds else horses
+
+        def _fallback_key(h: HorseData) -> tuple:
+            if h.odds_win > 0:
+                return (0, h.odds_win)
+            if h.ai_rank and h.ai_rank < 99:
+                return (1, h.ai_rank)
+            return (2, h.horse_number)
+
+        fallback_horses = sorted(source, key=_fallback_key)[:top_n]
+        fallback_results = []
+        for h in fallback_horses:
+            breakdown = ScoreBreakdown()
+            level = "C"
+            betting_note = _generate_betting_note(level)
+            story = _generate_story(h, breakdown)
+            reason_summary = _generate_reason_summary(h, story, level)
+            fallback_results.append(DangerResult(
+                horse=h,
+                danger_score=breakdown.total,
+                danger_level=level,
+                reason_summary=reason_summary,
+                score_breakdown=breakdown,
+                main_reasons=[],
+                betting_note=betting_note,
+                danger_type="",
+                story=story,
+            ))
+        return fallback_results
+
     return result

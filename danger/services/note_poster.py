@@ -9,6 +9,10 @@ logger = logging.getLogger(__name__)
 COOKIES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "output", "note_cookies.json")
 
 
+def _ensure_output_dir() -> None:
+    os.makedirs(os.path.join(os.path.dirname(__file__), "..", "..", "output"), exist_ok=True)
+
+
 def _login(page) -> bool:
     """note.comにログイン"""
     email = os.getenv("NOTE_EMAIL")
@@ -99,6 +103,22 @@ def post_to_note(
     except ImportError:
         return {"status": "error", "message": "playwright未インストール"}
 
+    if not title.strip():
+        return {"status": "error", "message": "タイトルが空です"}
+
+    if price > 0 and free_body and paid_body:
+        content = f"{free_body}\n\n{paid_body}"
+    elif body_md:
+        content = body_md
+    else:
+        return {"status": "error", "message": "本文が空です"}
+
+    content = content.strip()
+    if not content:
+        return {"status": "error", "message": "本文が空です"}
+
+    _ensure_output_dir()
+
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -134,6 +154,7 @@ def post_to_note(
                 time.sleep(1)
 
             # タイトル入力
+            page.wait_for_selector("textarea", timeout=15000)
             title_area = page.locator("textarea")
             if title_area.count() == 0:
                 browser.close()
@@ -144,6 +165,7 @@ def post_to_note(
             time.sleep(1)
 
             # 本文入力（ProseMirrorエディタ）
+            page.wait_for_selector(".ProseMirror", timeout=15000)
             body_area = page.locator(".ProseMirror")
             if body_area.count() == 0:
                 browser.close()
@@ -151,13 +173,6 @@ def post_to_note(
 
             body_area.click()
             time.sleep(0.5)
-
-            # 有料記事の場合: 無料部分と有料部分を分けて入力
-            # 有料ラインは「有料エリア設定」ステップで配置
-            if price > 0 and free_body and paid_body:
-                content = free_body + "\n\n" + paid_body
-            else:
-                content = body_md
 
             # 段落ごとに入力
             for line in content.split("\n"):
@@ -221,10 +236,11 @@ def post_to_note(
                         move_btns = page.locator('button:has-text("ラインをこの場所に変更")')
                         btn_count = move_btns.count()
                         if btn_count > 0:
-                            # 無料部分の末尾付近のボタンをクリック
                             click_idx = min(target_idx, btn_count - 1)
                             move_btns.nth(click_idx).click()
                             time.sleep(2)
+                        else:
+                            logger.warning("有料ラインの移動ボタンが見つからないため既定位置で投稿します")
                     else:
                         # free_body未指定: デフォルト位置（最初のラインのまま）
                         pass
