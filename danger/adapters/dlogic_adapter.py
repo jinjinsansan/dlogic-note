@@ -154,6 +154,28 @@ def fetch_all_horses(date: str, race_type: str = "nar") -> list[HorseData]:
                 if e.get("odds"):
                     odds_map[e["horse_number"]] = e["odds"]
 
+            # Fallback: オッズが全て0の場合、Data API経由でリアルタイムオッズ取得
+            if not odds_map:
+                try:
+                    import requests as _req
+                    _api_base = os.getenv("DLOGIC_API_URL", "http://localhost:5000")
+                    _resp = _req.get(
+                        f"{_api_base}/api/data/odds/{race_id}",
+                        params={"type": race_type},
+                        timeout=30,
+                    )
+                    if _resp.ok:
+                        _odds_data = _resp.json().get("odds", {})
+                        for _num_str, _val in _odds_data.items():
+                            try:
+                                odds_map[int(_num_str)] = float(_val)
+                            except (ValueError, TypeError):
+                                pass
+                    if odds_map:
+                        logger.info(f"  Odds fallback: {len(odds_map)} horses via API")
+                except Exception as _e:
+                    logger.warning(f"  Odds fallback failed: {_e}")
+
             # 共通パラメータ
             analysis_params = {
                 "race_id": race_id,
