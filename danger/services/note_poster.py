@@ -77,6 +77,9 @@ def _restore_cookies(context) -> bool:
         return False
 
 
+THUMBNAIL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "banner_kiken_ninki_uma.png")
+
+
 def post_to_note(
     title: str,
     body_md: str,
@@ -84,6 +87,7 @@ def post_to_note(
     publish: bool = True,
     free_body: str = "",
     paid_body: str = "",
+    thumbnail: str = "",
 ) -> dict:
     """note.comに記事を投稿
 
@@ -202,6 +206,25 @@ def post_to_note(
 
             publish_step_btn.click()
             time.sleep(3)
+
+            # サムネイル（みだし画像）設定
+            thumb = thumbnail or THUMBNAIL_PATH
+            if thumb and os.path.exists(thumb):
+                try:
+                    file_input = page.locator('input[type="file"]')
+                    if file_input.count() > 0:
+                        file_input.set_input_files(thumb)
+                        time.sleep(5)
+                        # トリミングダイアログが出たら「適用」
+                        apply_btn = page.locator('button:has-text("適用"), button:has-text("完了"), button:has-text("OK")')
+                        if apply_btn.count() > 0:
+                            apply_btn.first.click()
+                            time.sleep(3)
+                        logger.info(f"サムネイル設定完了: {os.path.basename(thumb)}")
+                    else:
+                        logger.warning("サムネイル用file inputが見つからない")
+                except Exception as e:
+                    logger.warning(f"サムネイル設定スキップ: {e}")
 
             # 公開設定画面のスクリーンショット（デバッグ用）
             page.screenshot(path="output/note_publish_step.png")

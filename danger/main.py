@@ -156,8 +156,8 @@ def run(date: str, race_type: str = "nar", force_post: bool = False):
     else:
         logger.warning("  ✗ X投稿文が空のためスキップ")
 
-    # Step 6: note有料記事投稿
-    logger.info("Step 6: note有料記事投稿")
+    # Step 6: note無料記事投稿
+    logger.info("Step 6: note無料記事投稿")
     note_title = f"【{date_display}】買ってはいけない人気馬{len(danger_results)}頭｜独自AIが過剰人気を検知"
     note_hash = _hash_text(note_title + note_free + note_paid)
     if not force_post and state.get("note_posted") and state.get("note_hash") == note_hash:
@@ -165,10 +165,8 @@ def run(date: str, race_type: str = "nar", force_post: bool = False):
     else:
         note_result = post_to_note(
             title=note_title,
-            body_md="",
-            price=980,
-            free_body=note_free,
-            paid_body=note_paid,
+            body_md=note_free + "\n\n" + note_paid,
+            price=0,
         )
         if note_result["status"] == "ok":
             state.update({
