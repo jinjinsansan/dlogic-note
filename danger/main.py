@@ -26,6 +26,7 @@ from .services.article_service import (
 )
 from .services.x_poster import post_to_x
 from .services.note_poster import post_to_note
+from .services.netkeita_poster import post_to_netkeita
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -178,6 +179,36 @@ def run(date: str, race_type: str = "nar", force_post: bool = False):
             logger.info(f"  ✓ note投稿成功: {note_result.get('url', '')}")
         else:
             logger.warning(f"  ✗ note投稿失敗: {note_result['message']}")
+
+    # Step 7: netkeita 自動投稿
+    logger.info("Step 7: netkeita投稿")
+    nk_hash = _hash_text(note_title + note_free + note_paid)
+    if not force_post and state.get("netkeita_posted") and state.get("netkeita_hash") == nk_hash:
+        logger.info("  ↳ netkeita投稿は既に実施済みのためスキップ")
+    else:
+        # プレビュー本文: note_free の最初の200文字
+        preview = (note_free[:200].rstrip() + "…") if len(note_free) > 200 else note_free
+        # 代表レース ID: 最上位 (危険度が最も高い) の危険人気馬が出走するレース
+        representative_race_id = danger_results[0].horse.race_id if danger_results else ""
+        nk_result = post_to_netkeita(
+            title=note_title,
+            body=note_free + "\n\n" + note_paid,
+            date=date,
+            description=f"AI独自分析による危険人気馬予想 — {date_display}",
+            is_premium=False,
+            preview_body=preview,
+            race_id=representative_race_id,
+        )
+        if nk_result["status"] == "ok":
+            state.update({
+                "netkeita_posted": True,
+                "netkeita_hash": nk_hash,
+                "netkeita_slug": nk_result.get("slug", ""),
+                "netkeita_posted_at": datetime.now().isoformat(),
+            })
+            logger.info(f"  ✓ netkeita投稿成功: /articles/{nk_result.get('slug', '')}")
+        else:
+            logger.warning(f"  ✗ netkeita投稿失敗: {nk_result['message']}")
 
     _save_post_state(output_dir, state)
 
